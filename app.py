@@ -1,5 +1,14 @@
+import ctypes
+ctypes.windll.shcore.SetProcessDpiAwareness(0)
 from tkinter import *
 from chat import get_response
+import numpy
+import cv2
+import pyautogui
+
+import matplotlib
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 
 BG_GRAY = "#ABB2B9"
 BG_COLOR = "#17202A"
@@ -20,7 +29,7 @@ class ChatApplication:
     def _setup_main_window(self):
         self.window.title("dv - Virtual Assistant and Interface")
         self.window.resizable(width=False, height=False)
-        self.window.configure(width=470, height=550, bg=BG_COLOR)
+        self.window.configure(width=800, height=550, bg=BG_COLOR)
 
         # head label
         head_label = Label(self.window, bg=BG_COLOR, fg=TEXT_COLOR,
@@ -31,57 +40,53 @@ class ChatApplication:
         line = Label(self.window, width=450, bg=BG_GRAY)
         line.place(relwidth=1, rely=0.07, relheight=0.012)
 
-        # text widget
-        self.text_widget = Text(self.window, width=20, height=2, bg=BG_COLOR, fg=TEXT_COLOR,
-                                font=FONT, padx=5, pady=5)        
-        self.text_widget.place(relheight=0.745, relwidth=1, rely=0.08)
-        self.text_widget.configure(cursor="arrow", state=DISABLED)
+        # Creating Figure.
+        self.fig = Figure(figsize = (18,10), dpi = 100)
 
-        # scroll bar
-        scrollbar = Scrollbar(self.text_widget)
-        scrollbar.place(relheight=1, relx=0.974)
-        scrollbar.configure(command=self.text_widget.yview)
+        # Creating Canvas
+        self.canv = FigureCanvasTkAgg(self.fig, master = self.window)
+        self.canv.get_tk_widget().place(relx=0.05, rely=0.1, relwidth=0.9, relheight=0.7)
 
         # bottom label
         bottom_label = Label(self.window, bg=BG_GRAY, height=80)
         bottom_label.place(relwidth=1, rely=0.825)
 
-        # message entry box
-        self.msg_entry = Entry(bottom_label, bg="#2C3E50", fg=TEXT_COLOR, font=FONT)
-        self.msg_entry.place(relwidth=0.74, relheight=0.06, rely=0.008, relx=0.011)
-        self.msg_entry.focus()
-        self.msg_entry.bind("<Return>", self._on_enter_pressed)
+        # skip button
+        skip_button = Button(bottom_label, text="Skip", font=FONT_BOLD, width=20, bg=BG_GRAY,
+                                   command=lambda: self._on_skip_pressed(None))
+        skip_button.place(relx=0.39, rely=0.008, relheight=0.06, relwidth=0.22)
 
-        # send button
-        send_button = Button(bottom_label, text="Send", font=FONT_BOLD, width=20, bg=BG_GRAY,
-                             command=lambda: self._on_enter_pressed(None))
-        send_button.place(relx=0.77, rely=0.008, relheight=0.06, relwidth=0.22)
+    def _on_skip_pressed(self, event):
+        self._capture_screenshot(None)
 
-    def _on_enter_pressed(self, event):
-        msg = self.msg_entry.get()
-        self._insert_message(msg, "You")
+    def _capture_screenshot(self, event):
+        pil_file = pyautogui.screenshot()
+        numpy_arr = numpy.array(pil_file)
+        self.current_image = cv2.cvtColor(numpy_arr, cv2.COLOR_RGB2BGR)
+        cv2.imwrite('screenshot.png', self.current_image)
 
-    def _insert_message(self, msg, sender):
-        # returns if the message is empty
-        if not msg:
-            return
-        
-        # clears the entry field
-        self.msg_entry.delete(0, END)
+        # Calculate the aspect ratio of the image
+        aspect_ratio = self.current_image.shape[1] / self.current_image.shape[0]
 
-        # display the message on the text widget
-        msg1 = f"{sender}: {msg}\n\n"
-        self.text_widget.configure(state=NORMAL)
-        self.text_widget.insert(END, msg1)
-        self.text_widget.configure(state=DISABLED)
+        # Calculate the width and height of the plot
+        plot_width = 0.9 * self.window.winfo_width()
+        plot_height = plot_width / aspect_ratio
 
-        # display the message from the bot
-        msg2 = f"dv: {get_response(msg)}\n\n"
-        self.text_widget.configure(state=NORMAL)
-        self.text_widget.insert(END, msg2)
-        self.text_widget.configure(state=DISABLED)
+        # Clear the figure
+        self.fig.clf()
 
-        self.text_widget.see(END)
+        # Display the image in the figure
+        a = self.fig.add_subplot(111)
+        a.imshow(self.current_image, aspect="auto")
+        a.set_title("Current Image")
+
+        # Set the size of the plot
+        self.fig.set_size_inches(plot_width/100, plot_height/100)
+
+        self.canv.draw()
+
+        # Use place method to maintain the placement of the canvas
+        self.canv.get_tk_widget().place(relx=0.05, rely=0.1, relwidth=0.9, relheight=0.7)
 
 if __name__ == "__main__":
     app = ChatApplication()
