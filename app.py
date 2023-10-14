@@ -1,14 +1,24 @@
+# needed to fix the scaling issue on windows due to pyautogui
 import ctypes
 ctypes.windll.shcore.SetProcessDpiAwareness(0)
+
+# used for the GUI
 from tkinter import *
-from chat import get_response
-import numpy
-import cv2
+
+# used for screenshot
 import pyautogui
 
+# used for plotting
 import matplotlib
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+
+# used for machine learning
+import numpy as np
+import io
+import cv2
+import tensorflow as tf # ver = 2.13
+from PIL import Image
 
 BG_GRAY = "#ABB2B9"
 BG_COLOR = "#17202A"
@@ -17,11 +27,14 @@ TEXT_COLOR = "#EAECEE"
 FONT = "Helvetica 14"
 FONT_BOLD = "Helvetica 13 bold"
 
-class ChatApplication:
+class MainApplication:
 
     def __init__(self):
         self.window = Tk()
         self._setup_main_window()
+
+        #Loads the model for performing inference
+        self.model = tf.saved_model.load("model")
 
     def run(self):
         self.window.mainloop()
@@ -58,10 +71,11 @@ class ChatApplication:
 
     def _on_skip_pressed(self, event):
         self._capture_screenshot(None)
+        self._perform_inference(None)
 
     def _capture_screenshot(self, event):
         pil_file = pyautogui.screenshot()
-        numpy_arr = numpy.array(pil_file)
+        numpy_arr = np.array(pil_file)
         self.current_image = cv2.cvtColor(numpy_arr, cv2.COLOR_RGB2BGR)
         cv2.imwrite('screenshot.png', self.current_image)
 
@@ -87,7 +101,40 @@ class ChatApplication:
 
         # Use place method to maintain the placement of the canvas
         self.canv.get_tk_widget().place(relx=0.05, rely=0.1, relwidth=0.9, relheight=0.7)
+    
+    def _perform_inference(self, event):
+        image = Image.open('screenshot.png')
+        # Preprocess the image (resize and convert to NumPy array)
+    
+        image = image.resize((640, 640))  # Resize to your desired dimensions
+        image = image.convert('RGB')
+        image = np.array(image)
+        image = image.astype(np.uint8)
+
+        # The input needs to be a tensor, convert it using `tf.convert_to_tensor`.
+        input_tensor = tf.convert_to_tensor(image)
+        # The model expects a batch of images, so add an axis with `tf.newaxis`.
+        input_tensor = input_tensor[tf.newaxis, ...]
+
+        # Run inference
+        predictions = self.model(input_tensor)
+
+        # Filter predictions based on detection_scores above 0.8
+        filtered_predictions = {
+            "detection_scores": [],
+            "detection_boxes": [],
+            "detection_classes": []
+        }
+
+        for i in range(len(predictions["detection_scores"][0])):
+            if predictions["detection_scores"][0][i] > 0.25:
+                print(predictions["detection_scores"][0][i])
+                filtered_predictions["detection_scores"].append(predictions["detection_scores"][0][i])
+                filtered_predictions["detection_boxes"].append(predictions["detection_boxes"][0][i].numpy)
+                filtered_predictions["detection_classes"].append(predictions["detection_classes"][0][i].numpy)
+
+        print(filtered_predictions)
 
 if __name__ == "__main__":
-    app = ChatApplication()
+    app = MainApplication()
     app.run()
