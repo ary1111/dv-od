@@ -1,6 +1,6 @@
 # needed to fix the scaling issue on windows due to pyautogui
-import ctypes
-ctypes.windll.shcore.SetProcessDpiAwareness(0)
+#import ctypes
+#ctypes.windll.shcore.SetProcessDpiAwareness(0)
 
 # used for the GUI
 from tkinter import *
@@ -130,10 +130,29 @@ class MainApplication:
             if predictions["detection_scores"][0][i] > 0.25:
                 print(predictions["detection_scores"][0][i])
                 filtered_predictions["detection_scores"].append(predictions["detection_scores"][0][i])
-                filtered_predictions["detection_boxes"].append(predictions["detection_boxes"][0][i].numpy)
-                filtered_predictions["detection_classes"].append(predictions["detection_classes"][0][i].numpy)
+                filtered_predictions["detection_boxes"].append(predictions["detection_boxes"][0][i])
+                filtered_predictions["detection_classes"].append(predictions["detection_classes"][0][i])
 
         print(filtered_predictions)
+
+        # if filtered_predictions is not empty, calculate the center of the bounding box of the first element
+        # and move the mouse to that location and click
+        if len(filtered_predictions["detection_scores"]) > 0:
+            # calculate the center of the bounding box
+            x1 = filtered_predictions["detection_boxes"][0][1]
+            y1 = filtered_predictions["detection_boxes"][0][0]
+            x2 = filtered_predictions["detection_boxes"][0][3]
+            y2 = filtered_predictions["detection_boxes"][0][2]
+
+            x = (x1 + x2) / 2
+            y = (y1 + y2) / 2
+
+            # move the mouse to that location and click, and then move back to the original location
+            currentMouseX, currentMouseY = pyautogui.position()
+            pyautogui.moveTo(x * pyautogui.size()[0], y * pyautogui.size()[1])
+            print(x * pyautogui.size()[0], y * pyautogui.size()[1])
+            pyautogui.click()
+            pyautogui.moveTo(currentMouseX, currentMouseY)
 
 if __name__ == "__main__":
     app = MainApplication()
