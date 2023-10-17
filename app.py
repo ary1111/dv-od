@@ -20,6 +20,11 @@ import cv2
 import tensorflow as tf # ver = 2.13
 from PIL import Image
 
+# used for speech recognition
+import speech_recognition as sr
+from vosk import Model, KaldiRecognizer, SetLogLevel
+import pyaudio
+
 BG_GRAY = "#ABB2B9"
 BG_COLOR = "#17202A"
 TEXT_COLOR = "#EAECEE"
@@ -28,13 +33,40 @@ FONT = "Helvetica 14"
 FONT_BOLD = "Helvetica 13 bold"
 
 class MainApplication:
-
     def __init__(self):
         self.window = Tk()
         self._setup_main_window()
 
         #Loads the model for performing inference
         self.model = tf.saved_model.load("model")
+        
+        # initialize the recognizer
+        #self.recognizer = sr.Recognizer()
+        #self.microphone = sr.Microphone()
+        #with self.microphone as source:
+        #    self.recognizer.adjust_for_ambient_noise(source)
+
+        # start listening in the background
+        #self.stop_listening = self.recognizer.listen_in_background(self.microphone, self._listen_callback)
+
+        # initialize the vosk model and recognizer
+        self.microphone = sr.Microphone()
+        SetLogLevel(0)
+        speech_model = Model("models/vosk-model-small-en-us-0.15")
+        self.recognizer = KaldiRecognizer(speech_model, 16000)
+
+        self.mic = pyaudio.PyAudio()
+        self.stream = self.mic.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=8192) 
+        self.stream.start_stream()
+
+        while True:
+            data = self.stream.read(4096)
+            if self.recognizer.AcceptWaveform(data):
+                text = self.recognizer.Result()
+                print(f"' {text[14:-3]} '")
+
+                if text[14:-3] == "skip":
+                    self._on_skip_pressed(None)        
 
     def run(self):
         self.window.mainloop()
@@ -153,6 +185,15 @@ class MainApplication:
             print(x * pyautogui.size()[0], y * pyautogui.size()[1])
             pyautogui.click()
             pyautogui.moveTo(currentMouseX, currentMouseY)
+
+    def _listen_callback(self, recognizer, audio):
+        try:
+            query = recognizer.recognize_whisper(audio, "tiny.en")
+            print(f"User said: {query}\n")
+        except sr.UnknownValueError:
+            print("SR could not understand audio")
+        except sr.RequestError as e:
+            print(f"Could not request results from SR service; {e}")
 
 if __name__ == "__main__":
     app = MainApplication()
