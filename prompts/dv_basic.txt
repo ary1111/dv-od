@@ -1,0 +1,6 @@
+Here are some functions you can use to command Deevee.
+
+dw.move_mouse() - moves the mouse to an x and y pixel position on a normalized input position.
+dw.press_lmb() - presses the left mouse button.
+dw.get_object_center() - returns the center of a bounding box as a percentage of width and height of the screen
+dw.get_desktop_state() - performs inference on the desktop and returns the location of bounding boxes for user interface elements.

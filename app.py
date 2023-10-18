@@ -25,6 +25,15 @@ import speech_recognition as sr
 from vosk import Model, KaldiRecognizer, SetLogLevel
 import pyaudio
 
+# used for llm
+import openai
+import json
+import argparse
+import re
+import os
+
+from deevee_wrapper import *
+
 BG_GRAY = "#ABB2B9"
 BG_COLOR = "#17202A"
 TEXT_COLOR = "#EAECEE"
@@ -32,41 +41,83 @@ TEXT_COLOR = "#EAECEE"
 FONT = "Helvetica 14"
 FONT_BOLD = "Helvetica 13 bold"
 
+code_block_regex = re.compile(r"```(.*?)```", re.DOTALL)
+
+class colors:  # You may need to change color settings
+    RED = "\033[31m"
+    ENDC = "\033[m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+
+dw = DeeveeWrapper()
+
 class MainApplication:
     def __init__(self):
-        self.window = Tk()
-        self._setup_main_window()
+        #dw = DeeveeWrapper()
+
+        self._initialize_chatgpt()
+
+        # Initialize Tkinter
+        #self.window = Tk()
+        #self._setup_main_window()        
 
         #Loads the model for performing inference
         self.model = tf.saved_model.load("model")
-        
-        # initialize the recognizer
+
+        with open(self.args.prompt, "r") as f:
+            prompt = f.read()
+
+        self._ask(prompt)
+
+        print("Welcome to dv! Type 'help' for a list of commands.")
+        while True:
+            question = input(colors.YELLOW + "Deevee> " + colors.ENDC)
+
+            if question == "!quit" or question == "!exit":
+                break
+
+            if question == "!clear":
+                os.system("cls")
+                continue
+
+            response = self._ask(question)
+
+            print(f"\n{response}\n")
+
+            code = self._extract_python_code(response)
+            if code is not None:
+                print("Please wait while I execute the code...")
+                exec(self._extract_python_code(response))
+                print("Done!\n")
+
+        # Initialize the vosk model and recognizer (Method 1)
+        #self.microphone = sr.Microphone()
+        #SetLogLevel(0)
+        #speech_model = Model("models/vosk-model-small-en-us-0.15")
+        #self.recognizer = KaldiRecognizer(speech_model, 16000)
+
+        #self.mic = pyaudio.PyAudio()
+        #self.stream = self.mic.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=8192) 
+        #self.stream.start_stream()
+
+        #while True:
+        #    data = self.stream.read(4096)
+        #    if self.recognizer.AcceptWaveform(data):
+        #        text = self.recognizer.Result()
+        #        print(f"' {text[14:-3]} '")
+
+        #        if text[14:-3] == "skip":
+        #            self._on_skip_pressed(None)        
+
+        # Initialize the recognizer (Method 2)
         #self.recognizer = sr.Recognizer()
         #self.microphone = sr.Microphone()
         #with self.microphone as source:
         #    self.recognizer.adjust_for_ambient_noise(source)
 
-        # start listening in the background
+        # Start listening in the background (Method 2)
         #self.stop_listening = self.recognizer.listen_in_background(self.microphone, self._listen_callback)
-
-        # initialize the vosk model and recognizer
-        self.microphone = sr.Microphone()
-        SetLogLevel(0)
-        speech_model = Model("models/vosk-model-small-en-us-0.15")
-        self.recognizer = KaldiRecognizer(speech_model, 16000)
-
-        self.mic = pyaudio.PyAudio()
-        self.stream = self.mic.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=8192) 
-        self.stream.start_stream()
-
-        while True:
-            data = self.stream.read(4096)
-            if self.recognizer.AcceptWaveform(data):
-                text = self.recognizer.Result()
-                print(f"' {text[14:-3]} '")
-
-                if text[14:-3] == "skip":
-                    self._on_skip_pressed(None)        
 
     def run(self):
         self.window.mainloop()
@@ -179,12 +230,7 @@ class MainApplication:
             x = (x1 + x2) / 2
             y = (y1 + y2) / 2
 
-            # move the mouse to that location and click, and then move back to the original location
-            currentMouseX, currentMouseY = pyautogui.position()
-            pyautogui.moveTo(x * pyautogui.size()[0], y * pyautogui.size()[1])
-            print(x * pyautogui.size()[0], y * pyautogui.size()[1])
-            pyautogui.click()
-            pyautogui.moveTo(currentMouseX, currentMouseY)
+            dw.press_lmb(x, y)
 
     def _listen_callback(self, recognizer, audio):
         try:
@@ -195,6 +241,74 @@ class MainApplication:
         except sr.RequestError as e:
             print(f"Could not request results from SR service; {e}")
 
+    def _initialize_chatgpt(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--prompt", type=str, default="prompts/dv_basic.txt")
+        parser.add_argument("--sysprompt", type=str, default="system_prompts/deevee_basic.txt")
+        self.args = parser.parse_args()
+
+        # Initialize OpenAI API
+        with open("config.json", "r") as f:
+            config = json.load(f)
+        print("Initializing ChatGPT...")
+        openai.api_key = config["OPENAI_API_KEY"]
+
+        with open(self.args.sysprompt, "r") as f:
+            sysprompt = f.read()
+
+        self.chat_history = [
+            {
+                "role": "system",
+                "content": sysprompt
+            },
+            {
+                "role": "user",
+                "content": "move the mouse to the top left of the screen"
+            },
+            {
+                "role": "assistant",
+                "content": """```python
+                    dw.move_mouse(0,0)
+                    ```
+
+                    This code uses the `move_mouse()` function to move the mouse to the center of the screen."""
+            }
+        ]
+
+        print("ChatGPT initialized.")
+
+    def _ask(self, prompt):
+        self.chat_history.append(
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        )
+        completion = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=self.chat_history,
+            temperature=0
+        )
+        self.chat_history.append(
+            {
+                "role": "assistant",
+                "content": completion.choices[0].message.content,
+            }
+        )
+        return self.chat_history[-1]["content"]
+
+    def _extract_python_code(self, content):
+        code_blocks = code_block_regex.findall(content)
+        if code_blocks:
+            full_code = "\n".join(code_blocks)
+
+            if full_code.startswith("python"):
+                full_code = full_code[7:]
+
+            return full_code
+        else:
+            return None
+    
 if __name__ == "__main__":
     app = MainApplication()
     app.run()
