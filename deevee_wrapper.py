@@ -7,14 +7,21 @@ import tensorflow as tf # ver = 2.13
 from PIL import Image
 from array import array
 
+regions_dict = {
+    1: "DESKTOP",
+    2: "TASKBAR",
+    3: "WINDOW"
+}
+
 objects_dict = {
-    1: "SKIP_AD",
+    1: "SKIP_AD_BUTTON",
 }
 
 class DeeveeWrapper:
     def __init__(self):
         #Loads the model for performing inference
         self.model = tf.saved_model.load("model")
+        self.model_stage1 = tf.saved_model.load("models/od_stage1")
 
     def click(self):
         pyautogui.click()
@@ -23,7 +30,13 @@ class DeeveeWrapper:
         pyautogui.moveTo(x * pyautogui.size()[0], y * pyautogui.size()[1])
 
     def get_object_center(self, bbox):
-        return (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
+        return (bbox[1] + bbox[3]) / 2, (bbox[0] + bbox[2]) / 2
+    
+    def get_object(self, object_name):
+        for i in range(len(self.desktop_state["detection_classes"])):
+            if self.desktop_state["detection_classes"][i] == object_name:
+                return self.desktop_state["detection_boxes"][i]
+        return None
 
     def get_desktop_state(self):
         pil_file = pyautogui.screenshot()
@@ -45,7 +58,7 @@ class DeeveeWrapper:
         input_tensor = input_tensor[tf.newaxis, ...]
 
         # Run inference
-        predictions = self.model(input_tensor)
+        predictions = self.model_stage1(input_tensor)
 
         # Filter predictions based on detection_scores above 0.8
         self.desktop_state = {
@@ -55,9 +68,10 @@ class DeeveeWrapper:
         }
 
         for i in range(len(predictions["detection_scores"][0])):
-            if predictions["detection_scores"][0][i] > 0.25:
+            if predictions["detection_scores"][0][i] > 0.50: #.20 for SKIP_AD_BUTTON
                 self.desktop_state["detection_scores"].append(predictions["detection_scores"][0][i].numpy())
                 self.desktop_state["detection_boxes"].append(predictions["detection_boxes"][0][i].numpy())
-                self.desktop_state["detection_classes"].append(predictions["detection_classes"][0][i].numpy())
+                #self.desktop_state["detection_classes"].append(objects_dict[int(predictions["detection_classes"][0][i].numpy())])
+                self.desktop_state["detection_classes"].append(regions_dict[int(predictions["detection_classes"][0][i].numpy())])
         
         return self.desktop_state
