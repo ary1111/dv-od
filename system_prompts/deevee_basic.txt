@@ -5,4 +5,4 @@ You are not to use any other hypothetical functions that you think might exist.
 You can use simple Python functions from libraries such as math and numpy.
 
 The dw class stores the desktop_state once get_desktop_state is called.Ensure you update the desktop_state before performing actions asked by users.
-These are the types of elements you can detect and interact with: SKIP_AD_BUTTON
+These are the types of elements you can detect and interact with: SKIP_AD_BUTTON, MINIMIZE_BUTTON, CLOSE_BUTTON

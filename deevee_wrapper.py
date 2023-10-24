@@ -7,6 +7,9 @@ import tensorflow as tf # ver = 2.13
 from PIL import Image
 from array import array
 
+import random
+import string
+
 regions_dict = {
     1: "DESKTOP",
     2: "TASKBAR",
@@ -15,13 +18,15 @@ regions_dict = {
 
 objects_dict = {
     1: "SKIP_AD_BUTTON",
+    2: "MINIMIZE_BUTTON",
+    3: "CLOSE_BUTTON"
 }
 
 class DeeveeWrapper:
     def __init__(self):
-        #Loads the model for performing inference
-        self.model = tf.saved_model.load("model")
+        #Loads the models for performing inference
         self.model_stage1 = tf.saved_model.load("models/od_stage1")
+        self.model_stage2 = tf.saved_model.load("models/od_stage2")
 
     def click(self):
         pyautogui.click()
@@ -33,9 +38,10 @@ class DeeveeWrapper:
         return (bbox[1] + bbox[3]) / 2, (bbox[0] + bbox[2]) / 2
     
     def get_object(self, object_name):
-        for i in range(len(self.desktop_state["detection_classes"])):
-            if self.desktop_state["detection_classes"][i] == object_name:
-                return self.desktop_state["detection_boxes"][i]
+        for region in self.desktop_state["regions"]:
+            for i in range(len(region["children"])):
+                if region["children"][i]["class"] == object_name:
+                    return region["children"][i]["box"]
         return None
 
     def get_desktop_state(self):
@@ -44,34 +50,64 @@ class DeeveeWrapper:
         current_image = cv2.cvtColor(numpy_arr, cv2.COLOR_RGB2BGR)
         cv2.imwrite('screenshot.png', current_image)
 
-        image = Image.open('screenshot.png')
-        # Preprocess the image (resize and convert to NumPy array)
+        orig_image = Image.open('screenshot.png')
+
+        # Preprocess the image and convert to tensor)
+        input_tensor = self.preprocess_image(orig_image)
+
+        # Run Stage 1 inference
+        s1predictions = self.model_stage1(input_tensor)
+
+        self.desktop_state = {
+            "regions":[]
+        }
+
+        for i in range(len(s1predictions["detection_scores"][0])):
+            if s1predictions["detection_scores"][0][i] > 0.50: #.20 for SKIP_AD_BUTTON
+                region = {
+                    "class": regions_dict[int(s1predictions["detection_classes"][0][i].numpy())],
+                    "score": s1predictions["detection_scores"][0][i].numpy(),
+                    "box": s1predictions["detection_boxes"][0][i].numpy(),
+                    "children": []
+                }
+                self.desktop_state["regions"].append(region)
+
+        # Run Stage 2 inference
+        for region in self.desktop_state["regions"]:
+            if region["class"] == "WINDOW":
+
+                cropped_image = orig_image.crop((
+                    int(region["box"][1] * pyautogui.size()[0]),
+                    int(region["box"][0] * pyautogui.size()[1]),
+                    int(region["box"][3] * pyautogui.size()[0]),
+                    int(region["box"][2] * pyautogui.size()[1])
+                ))
+
+                #cropped_image.save("cropped_" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) + ".png", "PNG")
+
+                # Preprocess the image and convert to tensor)
+                cropped_tensor = self.preprocess_image(cropped_image)
+
+                predictions = self.model_stage2(cropped_tensor)
+                for i in range(len(predictions["detection_scores"][0])):
+                    if predictions["detection_scores"][0][i] > 0.20:
+                        region["children"].append({
+                            "class": objects_dict[int(predictions["detection_classes"][0][i].numpy())],
+                            "score": predictions["detection_scores"][0][i].numpy(),
+                            "box": predictions["detection_boxes"][0][i].numpy()
+                        })
+        
+        return self.desktop_state
     
-        image = image.resize((640, 640))  # Resize to your desired dimensions
+    def preprocess_image(self, image):
+        image = image.resize((640, 640))
         image = image.convert('RGB')
         image = np.array(image)
         image = image.astype(np.uint8)
 
         # The input needs to be a tensor, convert it using `tf.convert_to_tensor`.
-        input_tensor = tf.convert_to_tensor(image)
+        image_tensor = tf.convert_to_tensor(image)
         # The model expects a batch of images, so add an axis with `tf.newaxis`.
-        input_tensor = input_tensor[tf.newaxis, ...]
+        image_tensor = image_tensor[tf.newaxis, ...]
 
-        # Run inference
-        predictions = self.model_stage1(input_tensor)
-
-        # Filter predictions based on detection_scores above 0.8
-        self.desktop_state = {
-            "detection_scores": [],
-            "detection_boxes": [],
-            "detection_classes": []
-        }
-
-        for i in range(len(predictions["detection_scores"][0])):
-            if predictions["detection_scores"][0][i] > 0.50: #.20 for SKIP_AD_BUTTON
-                self.desktop_state["detection_scores"].append(predictions["detection_scores"][0][i].numpy())
-                self.desktop_state["detection_boxes"].append(predictions["detection_boxes"][0][i].numpy())
-                #self.desktop_state["detection_classes"].append(objects_dict[int(predictions["detection_classes"][0][i].numpy())])
-                self.desktop_state["detection_classes"].append(regions_dict[int(predictions["detection_classes"][0][i].numpy())])
-        
-        return self.desktop_state
+        return image_tensor
