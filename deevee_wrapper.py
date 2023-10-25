@@ -91,10 +91,24 @@ class DeeveeWrapper:
                 predictions = self.model_stage2(cropped_tensor)
                 for i in range(len(predictions["detection_scores"][0])):
                     if predictions["detection_scores"][0][i] > 0.20:
+
+                        #calculate the region height and width
+                        region_height = region["box"][2] - region["box"][0]
+                        region_width = region["box"][3] - region["box"][1]
+
+                        # convert detection_boxes tensor to numpy array
+                        detection_boxes = predictions["detection_boxes"][0][i].numpy()
+
+                        #scale the detection_boxes to the original image size
+                        detection_boxes[0] = detection_boxes[0] * region_height + region["box"][0]
+                        detection_boxes[1] = detection_boxes[1] * region_width + region["box"][1]
+                        detection_boxes[2] = detection_boxes[2] * region_height + region["box"][0]
+                        detection_boxes[3] = detection_boxes[3] * region_width + region["box"][1]
+
                         region["children"].append({
                             "class": objects_dict[int(predictions["detection_classes"][0][i].numpy())],
                             "score": predictions["detection_scores"][0][i].numpy(),
-                            "box": predictions["detection_boxes"][0][i].numpy()
+                            "box": detection_boxes
                         })
         
         return self.desktop_state
