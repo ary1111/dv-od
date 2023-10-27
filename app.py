@@ -33,6 +33,7 @@ import re
 import os
 
 from deevee_wrapper import *
+from history import *
 
 BG_GRAY = "#ABB2B9"
 BG_COLOR = "#17202A"
@@ -61,7 +62,10 @@ class MainApplication:
         # Initialize Tkinter
         #self.window = Tk()
         #self._setup_main_window()        
-
+        
+        # Initialize the history object
+        self.dv_history = History("history")
+        
         #Loads the model for performing inference
         self.model = tf.saved_model.load("model")
 
@@ -295,6 +299,9 @@ class MainApplication:
                 "content": completion.choices[0].message.content,
             }
         )
+
+        self.desktop_state_tag = 'desktop_' + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.dv_history.store_user_prompt(prompt, completion.choices[0].message.content, self.desktop_state_tag)
         return self.chat_history[-1]["content"]
 
     def _extract_python_code(self, content):
