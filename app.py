@@ -67,7 +67,7 @@ class MainApplication:
         self.dv_history = History("history")
         
         #Loads the model for performing inference
-        self.model = tf.saved_model.load("model")
+        self.model = tf.saved_model.load("models/od_stage2")
 
         with open(self.args.prompt, "r") as f:
             prompt = f.read()
