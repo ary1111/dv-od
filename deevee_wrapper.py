@@ -123,8 +123,10 @@ class DeeveeWrapper:
 
                         region["children"].append({
                             "class": objects_dict[int(predictions["detection_classes"][0][i].numpy())],
-                            "score": predictions["detection_scores"][0][i].numpy(),
-                            "box": detection_boxes
+                            #"score": predictions["detection_scores"][0][i].numpy(),
+                            "box": detection_boxes,
+                            "children": [],
+                            "text": []
                         })
 
                 # OCR performed on CARD objects
@@ -142,12 +144,14 @@ class DeeveeWrapper:
                 ocr_predictions = self.perform_ocr(cropped_image)
                 print(ocr_predictions)
 
-                # Store any text predictions that overlap with the CARD objects
+                # Store any text predictions that overlap with the TEXT_BUTTON objects
                 for i in range(len(region["children"])):
-                    if region["children"][i]["class"] == "CARD":
-                        print("Region: %s" % region["children"][i]["box"])                        
+                    if region["children"][i]["class"] == "TEXT_BUTTON":
+                        print("Text Button: %s" % region["children"][i]["box"])                        
                         # OCR predictions are in the form of [[text, [x1, y1], [x2, y2], [x3, y3], [x4, y4]]]
                         for j in range(len(ocr_predictions)):
+                            if j >= len(ocr_predictions):
+                                break
                             #print("%s: %s" % (ocr_predictions[j][1], ocr_predictions[j][0]))
                             center_x = float(ocr_predictions[j][0][0][0] + ocr_predictions[j][0][1][0]) / 2 #pixels, cropped
                             center_x = center_x / (region_width*pyautogui.size()[0]) + region["box"][1]     #normalized, desktop
@@ -159,9 +163,55 @@ class DeeveeWrapper:
                             # Check if ocr_center is within the CARD object
                             if ocr_center[0] > region["children"][i]["box"][1] and ocr_center[0] < region["children"][i]["box"][3]:
                                 if ocr_center[1] > region["children"][i]["box"][0] and ocr_center[1] < region["children"][i]["box"][2]:
-                                    region["children"][i]["text"] = ocr_predictions[j][0]
-                                    print("%s: %s" % (ocr_predictions[j][1],ocr_predictions[j][0]))        
+                                    region["children"][i]["text"].append(ocr_predictions[j][1])
+                                    del ocr_predictions[j] #remove the text prediction from the list
+                                    j -= 1 #decrement the index because we removed an element from the list
+                                    print("%s: %s" % (ocr_predictions[j][1],ocr_predictions[j][0]))    
+
+                # Store any text predictions that overlap with the CARD objects
+                for i in range(len(region["children"])):
+                    if region["children"][i]["class"] == "CARD":
+                        print("Card: %s" % region["children"][i]["box"])                    
+                        # OCR predictions are in the form of [[text, [x1, y1], [x2, y2], [x3, y3], [x4, y4]]]
+                        for j in range(len(ocr_predictions)):
+                            if j >= len(ocr_predictions):
+                                break
+                            #print("%s: %s" % (ocr_predictions[j][1], ocr_predictions[j][0]))
+                            center_x = float(ocr_predictions[j][0][0][0] + ocr_predictions[j][0][1][0]) / 2 #pixels, cropped
+                            center_x = center_x / (region_width*pyautogui.size()[0]) + region["box"][1]     #normalized, desktop
+                            center_y = float(ocr_predictions[j][0][0][1] + ocr_predictions[j][0][2][1]) / 2 #pixels, cropped
+                            center_y = center_y / (region_height*pyautogui.size()[1]) + region["box"][0]    #normalized, desktop                            
+                            ocr_center = [center_x, center_y]                                           
+
+                            #print(ocr_center)
+                            # Check if ocr_center is within the CARD object
+                            if ocr_center[0] > region["children"][i]["box"][1] and ocr_center[0] < region["children"][i]["box"][3]:
+                                if ocr_center[1] > region["children"][i]["box"][0] and ocr_center[1] < region["children"][i]["box"][2]:
+                                    region["children"][i]["text"].append(ocr_predictions[j][1])
+                                    del ocr_predictions[j] #remove the text prediction from the list
+                                    j -= 1 #decrement the index because we removed an element from the list
+                                    print("%s: %s" % (ocr_predictions[j][1],ocr_predictions[j][0]))    
                 
+                # Move any TEXT_BUTTON objects that overlap with the CARD objects to the CARD object
+                for i in range(len(region["children"])): #loop through all CARD objects
+                    if i >= len(region["children"]):
+                        break
+                    if region["children"][i]["class"] == "CARD":
+                        for j in range(len(region["children"])):
+                            if i >= len(region["children"]):
+                                break
+                            if j >= len(region["children"]):
+                                break
+                            if region["children"][j]["class"] == "TEXT_BUTTON":
+                                button_x, button_y = self.get_object_center(region["children"][j]["box"])
+                                # Check if the TEXT_BUTTON object overlaps with the CARD object
+                                if button_x > region["children"][i]["box"][1] and button_x < region["children"][i]["box"][3]:
+                                    if button_y > region["children"][i]["box"][0] and button_y < region["children"][i]["box"][2]:
+                                        # Move the TEXT_BUTTON object to the CARD object
+                                        region["children"][i]["children"].append(region["children"][j])
+                                        del region["children"][j]
+                                        j -= 1                                        
+
                 self.dv_history.store_stage2_info(region, region_height*pyautogui.size()[1], region_width*pyautogui.size()[0], self.desktop_state_tag)
                 self.dv_history.store_cropped_image(cropped_image, self.desktop_state_tag)
         
