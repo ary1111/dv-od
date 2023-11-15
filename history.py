@@ -58,6 +58,16 @@ class History:
                 f.write(f"      <ymax>{int((region['box'][2]-region_state['box'][0])*pyautogui.size()[1])}</ymax>\n")
                 f.write("    </bndbox>\n")
                 f.write("  </object>\n")
+                for child in region["children"]:
+                    f.write("  <object>\n")
+                    f.write(f"    <name>{child['class']}</name>\n")
+                    f.write("    <bndbox>\n")
+                    f.write(f"      <xmin>{int((child['box'][1]-region_state['box'][1])*pyautogui.size()[0])}</xmin>\n")
+                    f.write(f"      <ymin>{int((child['box'][0]-region_state['box'][0])*pyautogui.size()[1])}</ymin>\n")
+                    f.write(f"      <xmax>{int((child['box'][3]-region_state['box'][1])*pyautogui.size()[0])}</xmax>\n")
+                    f.write(f"      <ymax>{int((child['box'][2]-region_state['box'][0])*pyautogui.size()[1])}</ymax>\n")
+                    f.write("    </bndbox>\n")
+                    f.write("  </object>\n")
             f.write("</annotation>\n")
 
     def store_user_prompt(self, prompt, response, filename):

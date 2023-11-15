@@ -21,11 +21,10 @@ regions_dict = {
 }
 
 objects_dict = {
-    1: "SKIP_AD_BUTTON",
-    2: "MINIMIZE_BUTTON",
-    3: "CLOSE_BUTTON",
-    4: "CARD",
-    5: "TEXT_BUTTON"
+    1: "CARD",
+    2: "TEXT_BUTTON",
+    3: "MINIMIZE_BUTTON",
+    4: "CLOSE_BUTTON",    
 }
 
 class DeeveeWrapper:
@@ -49,12 +48,38 @@ class DeeveeWrapper:
     def get_object_center(self, bbox):
         return (bbox[1] + bbox[3]) / 2, (bbox[0] + bbox[2]) / 2
     
-    def get_object(self, object_name):
+    def get_object(self, object_id):
         for region in self.desktop_state["regions"]:
             for i in range(len(region["children"])):
-                if region["children"][i]["class"] == object_name:
+                if region["children"][i]["id"] == object_id:
                     return region["children"][i]["box"]
+                for j in range(len(region["children"][i]["children"])):
+                    if region["children"][i]["children"][j]["id"] == object_id:
+                        return region["children"][i]["children"][j]["box"]
         return None
+    
+    def print_desktop_state(self):
+        # empty string
+        desktop_state_str = ""
+
+        for region in self.desktop_state["regions"]:
+            #desktop_state_str += region["class"] + "\n"
+            desktop_state_str += region["class"] + "{"
+            for i in range(len(region["children"])):
+                #desktop_state_str += "  " + region["children"][i]["class"] + "[id:"+str(region["children"][i]["id"])+"]" + " "
+                desktop_state_str += "{" + region["children"][i]["class"] + "[id:"+str(region["children"][i]["id"])+"]" + " "
+                #desktop_state_str += str(region["children"][i]["text"]) +"\n"
+                desktop_state_str += str(region["children"][i]["text"]) +"{"
+                for j in range(len(region["children"][i]["children"])):
+                    #desktop_state_str += region["children"][i]["children"][j]["class"] + "[id:"+str(region["children"][i]["children"][j]["id"])+"]" + "\n"
+                    desktop_state_str += "{" + region["children"][i]["children"][j]["class"] + "[id:"+str(region["children"][i]["children"][j]["id"])+"]" + ", "
+                    #desktop_state_str += str(region["children"][i]["children"][j]["text"]) + "\n"
+                    desktop_state_str += str(region["children"][i]["children"][j]["text"]) + "},"
+                desktop_state_str += " }}, "
+            desktop_state_str += "}, "
+        
+        #print(desktop_state_str)
+        return desktop_state_str
 
     def get_desktop_state(self):
         import datetime
@@ -91,6 +116,7 @@ class DeeveeWrapper:
 
         self.dv_history.store_region_info(self.desktop_state, self.desktop_state_tag)
         
+        k = 0
         # Run Stage 2 inference
         for region in self.desktop_state["regions"]:
             if region["class"] == "WINDOW":
@@ -124,10 +150,12 @@ class DeeveeWrapper:
                         region["children"].append({
                             "class": objects_dict[int(predictions["detection_classes"][0][i].numpy())],
                             #"score": predictions["detection_scores"][0][i].numpy(),
+                            "id": k,
                             "box": detection_boxes,
                             "children": [],
                             "text": []
                         })
+                        k += 1
 
                 # OCR performed on CARD objects
                 #for i in range(len(region["children"])):
@@ -142,16 +170,15 @@ class DeeveeWrapper:
                 #        print(ocr_predictions)
 
                 ocr_predictions = self.perform_ocr(cropped_image)
-                print(ocr_predictions)
+                #print(ocr_predictions)
 
                 # Store any text predictions that overlap with the TEXT_BUTTON objects
+                delete = []
                 for i in range(len(region["children"])):
                     if region["children"][i]["class"] == "TEXT_BUTTON":
-                        print("Text Button: %s" % region["children"][i]["box"])                        
+                        #print("Text Button: %s" % region["children"][i]["box"])                        
                         # OCR predictions are in the form of [[text, [x1, y1], [x2, y2], [x3, y3], [x4, y4]]]
                         for j in range(len(ocr_predictions)):
-                            if j >= len(ocr_predictions):
-                                break
                             #print("%s: %s" % (ocr_predictions[j][1], ocr_predictions[j][0]))
                             center_x = float(ocr_predictions[j][0][0][0] + ocr_predictions[j][0][1][0]) / 2 #pixels, cropped
                             center_x = center_x / (region_width*pyautogui.size()[0]) + region["box"][1]     #normalized, desktop
@@ -160,22 +187,20 @@ class DeeveeWrapper:
                             ocr_center = [center_x, center_y]                                           
 
                             #print(ocr_center)
-                            # Check if ocr_center is within the CARD object
+                            # Check if ocr_center is within the Button object
                             if ocr_center[0] > region["children"][i]["box"][1] and ocr_center[0] < region["children"][i]["box"][3]:
                                 if ocr_center[1] > region["children"][i]["box"][0] and ocr_center[1] < region["children"][i]["box"][2]:
+                                    #print("%s: %s" % (ocr_predictions[j][1],ocr_predictions[j][0])) 
                                     region["children"][i]["text"].append(ocr_predictions[j][1])
-                                    del ocr_predictions[j] #remove the text prediction from the list
-                                    j -= 1 #decrement the index because we removed an element from the list
-                                    print("%s: %s" % (ocr_predictions[j][1],ocr_predictions[j][0]))    
+                                    delete.append(j)
+                ocr_predictions = [i for j, i in enumerate(ocr_predictions) if j not in delete]
 
                 # Store any text predictions that overlap with the CARD objects
                 for i in range(len(region["children"])):
                     if region["children"][i]["class"] == "CARD":
-                        print("Card: %s" % region["children"][i]["box"])                    
+                        #print("Card: %s" % region["children"][i]["box"])                    
                         # OCR predictions are in the form of [[text, [x1, y1], [x2, y2], [x3, y3], [x4, y4]]]
                         for j in range(len(ocr_predictions)):
-                            if j >= len(ocr_predictions):
-                                break
                             #print("%s: %s" % (ocr_predictions[j][1], ocr_predictions[j][0]))
                             center_x = float(ocr_predictions[j][0][0][0] + ocr_predictions[j][0][1][0]) / 2 #pixels, cropped
                             center_x = center_x / (region_width*pyautogui.size()[0]) + region["box"][1]     #normalized, desktop
@@ -188,20 +213,13 @@ class DeeveeWrapper:
                             if ocr_center[0] > region["children"][i]["box"][1] and ocr_center[0] < region["children"][i]["box"][3]:
                                 if ocr_center[1] > region["children"][i]["box"][0] and ocr_center[1] < region["children"][i]["box"][2]:
                                     region["children"][i]["text"].append(ocr_predictions[j][1])
-                                    del ocr_predictions[j] #remove the text prediction from the list
-                                    j -= 1 #decrement the index because we removed an element from the list
-                                    print("%s: %s" % (ocr_predictions[j][1],ocr_predictions[j][0]))    
+                                    #print("%s: %s" % (ocr_predictions[j][1],ocr_predictions[j][0]))    
                 
                 # Move any TEXT_BUTTON objects that overlap with the CARD objects to the CARD object
+                delete = []
                 for i in range(len(region["children"])): #loop through all CARD objects
-                    if i >= len(region["children"]):
-                        break
                     if region["children"][i]["class"] == "CARD":
                         for j in range(len(region["children"])):
-                            if i >= len(region["children"]):
-                                break
-                            if j >= len(region["children"]):
-                                break
                             if region["children"][j]["class"] == "TEXT_BUTTON":
                                 button_x, button_y = self.get_object_center(region["children"][j]["box"])
                                 # Check if the TEXT_BUTTON object overlaps with the CARD object
@@ -209,12 +227,12 @@ class DeeveeWrapper:
                                     if button_y > region["children"][i]["box"][0] and button_y < region["children"][i]["box"][2]:
                                         # Move the TEXT_BUTTON object to the CARD object
                                         region["children"][i]["children"].append(region["children"][j])
-                                        del region["children"][j]
-                                        j -= 1                                        
-
+                                        delete.append(j)
+                region["children"] = [i for j, i in enumerate(region["children"]) if j not in delete]
                 self.dv_history.store_stage2_info(region, region_height*pyautogui.size()[1], region_width*pyautogui.size()[0], self.desktop_state_tag)
                 self.dv_history.store_cropped_image(cropped_image, self.desktop_state_tag)
         
+        #self.print_desktop_state()
         return self.desktop_state
     
     def preprocess_image(self, image):

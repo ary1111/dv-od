@@ -85,7 +85,12 @@ class MainApplication:
                 os.system("cls")
                 continue
 
-            response = self._ask(question)
+            # Update the desktop state
+            dw.get_desktop_state()
+            # modify the question to include the desktop state
+            modified_question = "This is the desktop state: \n\n" + dw.print_desktop_state() + "\n\n" + question
+
+            response = self._ask(modified_question)
 
             print(f"\n{response}\n")
 
