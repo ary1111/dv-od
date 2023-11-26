@@ -24,7 +24,9 @@ objects_dict = {
     1: "CARD",
     2: "TEXT_BUTTON",
     3: "MINIMIZE_BUTTON",
-    4: "CLOSE_BUTTON",    
+    4: "CLOSE_BUTTON",
+    5: "CART_BUTTON",
+    6: "BACK_BUTTON"
 }
 
 class DeeveeWrapper:

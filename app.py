@@ -294,7 +294,7 @@ class MainApplication:
             }
         )
         completion = openai.ChatCompletion.create(
-            model="ft:gpt-3.5-turbo-1106:personal::8N16lm9V",
+            model="ft:gpt-3.5-turbo-1106:personal::8OtIiOtv",
             messages=self.chat_history,
             temperature=0
         )
