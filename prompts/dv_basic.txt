@@ -5,3 +5,8 @@ dw.click() - presses the left mouse button.
 dw.get_object_center(box) - returns the x and y center of a bounding box as a percentage of width and height of the screen
 dw.get_object(object_id) - returns the box for a given object_id.
 dw.get_desktop_state() - performs inference on the desktop and returns the location of bounding boxes for user interface elements.
+dw.new_step_list() - creates a blank list for storing steps.
+dw.add_step(new_step) - adds a step in the form of a string to the step list.
+self._step_prompt() - performs the first step in the stored list of steps.
+self._evaluate_step() - called at the end of a step to move to the next step.
+dw._continue_step() - continues to perform a step with an updated state.

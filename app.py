@@ -294,7 +294,7 @@ class MainApplication:
             }
         )
         completion = openai.ChatCompletion.create(
-            model="ft:gpt-3.5-turbo-1106:personal::8OtIiOtv",
+            model="ft:gpt-3.5-turbo-1106:personal::8PaeI5yR",
             messages=self.chat_history,
             temperature=0
         )
@@ -320,6 +320,68 @@ class MainApplication:
             return full_code
         else:
             return None
+        
+    def _step_prompt(self):
+        if len(dw.step_list) == 0:
+            print("There are no steps to execute.")
+            return
+        
+        # Get the first element of dw step_list
+        step = dw.step_list[0]
+
+        modified_question = "This is the desktop state: \n\n" + dw.print_desktop_state() + "\n\n" + "Current Step: " + step
+
+        response = self._ask(modified_question)
+
+        code = self._extract_python_code(response)
+        if code is not None:
+            print("Please wait while I execute the code...")
+            exec(self._extract_python_code(response))
+            print("Done!\n")
+
+    def _evaluate_step(self):
+        dw.remove_first_step()
+
+        if len(dw.step_list) == 0:
+            print("There are no steps to evaluate.")
+            return
+
+        # Get the first element of dw step_list
+        step = dw.step_list[0]
+
+        # Update the desktop state
+        dw.get_desktop_state()
+
+        modified_question = "This is the desktop state: \n\n" + dw.print_desktop_state() + "\n\n" + "Current Step: " + step
+
+        response = self._ask(modified_question)
+
+        code = self._extract_python_code(response)
+        if code is not None:
+            print("Please wait while I execute the code...")
+            exec(self._extract_python_code(response))
+            print("Done!\n")
+
+    def _continue_step(self):
+        if len(dw.step_list) == 0:
+            print("There are no steps to continue.")
+            return
+
+        # Get the first element of dw step_list
+        step = dw.step_list[0]
+
+        # Update the desktop state
+        dw.get_desktop_state()
+
+        modified_question = "This is the desktop state: \n\n" + dw.print_desktop_state() + "\n\n" + "Current Step: " + step
+
+        response = self._ask(modified_question)
+
+        code = self._extract_python_code(response)
+        if code is not None:
+            print("Please wait while I execute the code...")
+            exec(self._extract_python_code(response))
+            print("Done!\n")
     
 if __name__ == "__main__":
     app = MainApplication()
